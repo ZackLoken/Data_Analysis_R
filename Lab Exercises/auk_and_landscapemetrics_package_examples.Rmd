@@ -1,0 +1,147 @@
+---
+title: ""
+author: "Zack Loken"
+date: "2/14/2022"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, warning = FALSE, message = FALSE)
+```
+
+<center> <h1>__Zack Loken - OCS 7131 Exercise 3__</h1> </center>
+
+### ![](D:/Zack/School/Classes/Spring 22/OCS 7131 - Data Analysis in R/Lab/Lab 3/auk.png){width=75}   Package 1: [`auk`](https://cornelllabofornithology.github.io/auk/)
+
+##### `auk` includes tools for eBird data extraction and processing in `R`. Due to it's large size, the eBird dataset must be filtered to a smaller subset before reading into `R`. This package acts as a front end for the Unix utility AWK, allowing users to filter eBird data before importing into `R`. See below for an example of how to filter the dataset by species and read into `R`:
+<br>
+
+##### Install `auk`
+```{r eval=FALSE}
+install.packages("auk")
+library(auk)
+```
+<br>
+
+##### Set AWK path
+```{r eval=FALSE}
+auk::auk_set_awk_path("C:/cygwin64/bin/gawk.exe/bin/gawk.exe", 
+                      overwrite=TRUE)
+```
+<br>
+
+##### Set EBD data directory
+```{r eval=FALSE}
+auk::auk_set_ebd_path("D:/Zack/School/Classes/Spring 22/OCS 7131 - Data Analysis in R/Lecture/Assignments/Assignment 2/ebd_US-LA-109_relDec-2021/", 
+  overwrite = TRUE)
+```
+<br>
+
+##### Path to the eBird data file
+```{r}
+f_in <- "ebd_US-LA-109_relDec-2021.txt"
+```
+<br>
+
+##### Output text file
+```{r}
+f_out <- "ebd_filtered_LA.txt"
+```
+<br>
+
+##### Define reference file
+```{r}
+ebd <- auk::auk_ebd(f_in)
+```
+<br>
+
+##### Define filters - by species in this case
+```{r}
+ebd_filters <- auk::auk_species(ebd, 
+                                species = c("Dendrocygna autumnalis", "Dendrocygna bicolor",
+                                            "Anser caerulescens", "Anser rossii", "Anser albifrons",
+                                            "Branta hutchinsii", "Branta canadensis", "Cygnus buccinator",
+                                            "Cygnus columbianus", "Aix sponsa", "Spatula discors",
+                                            "Spatula cyanoptera", "Spatula clypeata", "Mareca strepera",
+                                            "Mareca americana", "Anas platyrhynchos", "Anas rubripes",
+                                            "Anas acuta", "Anas crecca", "Aythya valisineria",
+                                            "Aythya americana", "Aythya collaris", "Aythya marila",
+                                            "Aythya affinis", "Melanitta perspicillata", "Melanitta deglandi",
+                                            "Melanitta americana", "Clangula hyemalis", "Bucephala albeola", 
+                                            "Bucephala clangula", "Lophodytes cucullatus", "Mergus merganser",
+                                            "Mergus serrator", "Oxyura jamaicensis"))
+```
+<br>
+
+##### Run filtering
+```{r}
+ebd_filtered <- auk::auk_filter(ebd_filters, 
+                                file = f_out, 
+                                overwrite = TRUE)
+```
+<br>
+
+##### Read text file into `R` data frame
+```{r}
+ebd_df <- auk::read_ebd(ebd_filtered)
+```
+<br>
+
+##### Export `R` data frame to csv file
+```{r}
+write.csv(ebd_df, 
+          file = "D:/Zack/School/Classes/Spring 22/OCS 7131 - Data Analysis in R/Lecture/Assignments/Assignment 2/ebd_US-LA-109_relDec-2021/ebd_filtered_LA.csv", 
+          row.names = TRUE)
+```
+<br>
+
+### ![](D:/Zack/School/Classes/Spring 22/OCS 7131 - Data Analysis in R/Lab/Lab 3/LandscapeMetrics.png){width=75}   Package 2: [`landscapemetrics`](https://r-spatialecology.github.io/landscapemetrics/)
+
+##### `landscapemetrics` is an `R` package for calculating landscape metrics for categorical landscape patterns in a tidy workflow. It also allows for calculations of four theoretical metrics of landscape complexity: marginal entropy, conditional entropy, joint entropy, and mutual information. See below for an example of how to calculate all landscape metrics for a raster dataset: 
+<br>
+
+##### Install `landscapemetrics` and `landscapetools`
+```{r eval=FALSE}
+install.packages("landscapemetrics")
+install.packages("landscapetools")
+library(landscapemetrics)
+library(landscapetools)
+```
+<br>
+
+##### Import raster
+```{r}
+library(raster)
+library(sp)
+library(rgdal)
+setwd("D:/Zack/School/Classes/Spring 22/OCS 7131 - Data Analysis in R/Lab/Lab 3/")
+LGRW <- raster('MO_LGRW_CoverTypes.img')
+```
+<br>
+
+##### Visualize raster
+```{r}
+landscapetools::show_landscape(LGRW,
+                               discrete = TRUE,
+                               axis_title_just = "center",
+                               axis_title_size = 10,
+                               legend_title = "Cover Type Class",
+                               viridis_scale = "C")
+```
+<br>
+<br>
+
+##### Calculate all landscape metrics at class level
+```{r}
+LGRW_metrics <- landscapemetrics::calculate_lsm(LGRW, 
+                                                level = "class")
+LGRW_metrics
+```
+<br>
+
+##### Export `R` data frame to csv file
+```{r}
+write.csv(LGRW_metrics, 
+          file = "D:/Zack/School/Classes/Spring 22/OCS 7131 - Data Analysis in R/Lab/Lab 3/LGRW_landscapeMetrics.csv", 
+          row.names = TRUE)
+```
