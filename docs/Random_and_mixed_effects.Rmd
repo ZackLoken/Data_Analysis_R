@@ -1,0 +1,135 @@
+---
+title: ""
+author: "Zack Loken"
+date: "`r Sys.Date()`"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, warning = FALSE, message = FALSE, fig.align = "CENTER", fig.width = 14)
+```
+
+<center> <h1>__Zack Loken - OCS 7131 Exercise 8__</h1> </center>
+<br>
+
+#### __1. Find a dataset with a factor that could be considered a random effect.__
+
+##### Winter (October 1 - December 31) surface water area as a response to mean max winter temperature by the categorical effect of wetland type (6 levels) for a portion of Missouri's Lower Grand River floodplain.
+<br>
+
+##### Why to consider random effects for this model:
+  1. Both the individual wetland types and the relationship between surface water area and mean winter max temp can be viewed as a random sample from a probability distribution. 
+  2. The intended scope of inference extends beyond the levels of the factor (wetland type) included in the current analysis to the entire population of a factor.
+  3. The coefficients of a given factor *could be* modeled to see if there is variation in surface water area across wetland type. 
+  4. There is a lack of statistical independence due to multiple observations from each wetland type over space and time. 
+
+```{r}
+library(tidyverse)
+library(data.table)
+
+# Loading the data
+LGRW_SWA <- read.csv("E:/Zack/Google Earth Engine/GEE for Systems Ecology - Spring 2021/Missouri Habitat and Water Classification/SurfaceWaterArea_Annual/LGRW_WetHectares_byYear.csv") # Annual surface water area (SWA): 1984 - 2020
+
+LGRW_TC <- read.csv("E:/Zack/Google Earth Engine/GEE for Systems Ecology - Spring 2021/Missouri Habitat and Water Classification/TerraClim/TerraClim_OctNovDec_LGRW.csv") # Annual TerraClim climate data: 1984 - 2020
+
+# Quick cleanup -- rename the column headers
+setnames(LGRW_SWA, skip_absent = TRUE,
+         old = c('CoverType', 'Owner', 'Hectares', 'X1984_SWA', 'X1987_SWA', 'X1989_SWA', 'X1990_SWA', 
+                 'X1991_SWA', 'X1992_SWA', 'X1994_SWA', 'X1996_SWA', 'X1997_SWA', 'X1999_SWA', 'X2001_SWA',
+                 'X2004_SWA', 'X2005_SWA', 'X2006_SWA', 'X2010_SWA', 'X2011_SWA', 'X2014_SWA', 'X2015_SWA',
+                 'X2016_SWA', 'X2018_SWA', 'X2019_SWA', 'X2020_SWA'),
+         new = c('Cover_Type', 'Owner', 'Hectares', '1984', '1987', '1989', '1990', '1991', '1992', '1994', 
+                 '1996', '1997', '1999', '2001', '2004', '2005', '2006', '2010', '2011', '2014', '2015', 
+                 '2016', '2018','2019', '2020'))
+
+# Subset to show only wetland cover type classes.  
+LGRW_SWA_Sub <- subset(LGRW_SWA, Cover_Type == c('Levee', 'Grand River', 'Wetland',
+                      'Forest - Riprarian', 'Water Bodies', 'Aquatic'), 
+                       select = c(1:25))
+
+# Convert wide data frame to narrow format with one column containing year. 
+narrow.LGRW_SWA_Sub <- pivot_longer(data = LGRW_SWA_Sub, 
+                          cols = c(4:25), 
+                          names_to = "Year", 
+                          values_to = "SWA_Hectares")
+
+# Remove 'Hectares' column from narrow.LGRW_SWA data frame (This column is polygon size)
+narrow.LGRW_SWA_Sub2 <- subset(narrow.LGRW_SWA_Sub, select = -Hectares)
+
+# Group by class, then summarize the total surface water area of each class for each year.  
+LGRW_SWA_Sum <- narrow.LGRW_SWA_Sub2 %>% 
+                    group_by(Cover_Type, Year) %>%
+                    summarise(SWA_sum = sum(SWA_Hectares), n = n())
+
+# Change all 'Forest - Riprarian' values to 'Forest - Riparian'
+LGRW_SWA_Sum$Cover_Type[23:44] <- "Forest - Riparian"
+
+# Merge (left join) the LGRW_SWA and LGRW_TC data frames into one df
+LGRW_TC$Year <- as.character(LGRW_TC$year)
+LGRW <- merge(x = LGRW_SWA_Sum, y = LGRW_TC, by = "Year", all.x = TRUE)
+
+# Log transform SWA_sum and tmmx_cels (mean max winter temp(Oct, Nov, Dec)) to improve model fit
+LGRW$l.tmmx_cels <- log(LGRW$tmmx_cels)
+LGRW$l.SWA_sum <- log(LGRW$SWA_sum)
+```
+<br>
+
+#### __2. Using the `lme4` library, run a simple model of your data.__
+
+``` {r}
+library(lme4)
+
+# Mixed model with fixed slope and random intercept
+mix.int<- lmer(l.SWA_sum ~ l.tmmx_cels + (1 | Cover_Type), data = LGRW)
+summary(mix.int)
+coef(mix.int)$Cover_Type
+
+# Plot the residuals as a function of the fitted data. 
+resmix.int <- resid(mix.int)
+fitmix.int <- fitted(mix.int)
+plot(resmix.int ~ fitmix.int, pch = 19, las = 1); abline(0, 0, col = "red")
+
+# Mixed model with random slope and fixed intercept
+mix.sl <- lmer(l.SWA_sum ~ l.tmmx_cels + (0 + l.tmmx_cels | Cover_Type), data = LGRW)
+summary(mix.sl)
+coef(mix.sl)$Cover_Type
+
+# Plot the residuals as a function of the fitted data. 
+resmix.sl <- resid(mix.sl)
+fitmix.sl <- fitted(mix.sl)
+plot(resmix.sl ~ fitmix.sl, pch = 19, las = 1); abline(0, 0, col = "red")
+
+# Random effects model with random slope and random intercept
+re.mod <- lmer(l.SWA_sum ~ l.tmmx_cels + (l.tmmx_cels | Cover_Type), data = LGRW)
+summary(re.mod)
+coef(re.mod)$Cover_Type
+AIC(re.mod)
+
+# Plot the residuals as a function of the fitted data. 
+resre.mod <- resid(re.mod)
+fitre.mod <- fitted(re.mod)
+plot(resre.mod ~ fitre.mod, pch = 19, las = 1); abline(0, 0, col = "red")
+```
+
+#### __3. Include a figure of your data and model.__
+
+``` {r}
+library(ggplot2)
+library(ggpubr)
+
+# Look at the cover type specific plots to have a baseline of each cover type's SWA/tmmx_cels relationship. 
+ggplot(LGRW, aes(y = l.SWA_sum, x = l.tmmx_cels)) +
+  geom_point() +
+  xlab("Log (Mean Winter Max Temperature (Celsius))") +
+  ylab("Log (Sum of Surface Water Area (Hectares))") +
+  theme_classic(base_size = 15) +
+  stat_smooth(aes(color = Cover_Type), 
+              method = "lm", formula = 'y ~ x', se = TRUE, fullrange = TRUE) +
+  labs(color = "Wetland Type") +
+  stat_regline_equation(label.x = 2.47, label.y = 9.15, aes(label = ..eq.label..)) +
+  stat_regline_equation(label.x = 2.6, label.y = 9.15, aes(label = ..rr.label..)) +
+  facet_wrap(~Cover_Type)
+```
+<br>
+
+##### The model that fit this data best was the random effects model, which allowed for both random intercept and slope for each wetland type in the analysis (i.e., each wetland type could explore its own unique regression line). However, there does not appear to be a significant relationship between surface water area and mean max winter temperature in this region of the Lower Grand River floodplain. 
